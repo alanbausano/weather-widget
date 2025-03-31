@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Weather Widget Demo</title><script defer="defer" src="weather-widget.js"></script></head><body><script>window.addEventListener("load", function () {
+        const container = document.createElement("div");
+        container.id = "widget-container";
+        document.body.appendChild(container);
+
+        if (window.Widget) {
+          Widget.init({
+            city: "London",
+          });
+        } else {
+          console.error("Weather Widget not loaded");
+        }
+      });</script></body></html>
