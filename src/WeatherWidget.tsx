@@ -1,9 +1,26 @@
-import React, { useEffect, useState } from "react";
-import { Theme } from "@radix-ui/themes";
-import { SunIcon, MoonIcon, UpdateIcon } from "@radix-ui/react-icons";
+import React, { useState, useEffect } from "react";
+import "@radix-ui/themes/styles.css";
+import {
+  Theme,
+  Card,
+  Text,
+  Button,
+  Flex,
+  Box,
+  Container,
+  Heading,
+} from "@radix-ui/themes";
+import {
+  SunIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "@radix-ui/react-icons";
+import { WiHumidity, WiStrongWind } from "react-icons/wi";
+import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   WeatherData,
-  DailyForecast,
+  ForecastData,
   WidgetProps,
   TemperatureUnit,
 } from "./types";
@@ -11,48 +28,105 @@ import "./WeatherWidget.css";
 
 const BASE_URL = "https://api.openweathermap.org/data/2.5";
 
-const WeatherWidget: React.FC<WidgetProps> = ({ city, apiKey }) => {
-  const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(
-    null
-  );
-  const [forecast, setForecast] = useState<DailyForecast[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const fetchWeatherData = async (
+  city: string | { lat: number; lon: number },
+  apiKey: string
+): Promise<WeatherData> => {
+  console.log("Using API key:", apiKey);
+
+  const url =
+    typeof city === "string"
+      ? `${BASE_URL}/weather?q=${city}&appid=${apiKey}&units=metric`
+      : `${BASE_URL}/weather?lat=${city.lat}&lon=${city.lon}&appid=${apiKey}&units=metric`;
+
+  console.log("Fetching weather from:", url);
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Weather API Error:", errorText);
+    throw new Error(`Failed to fetch weather data: ${errorText}`);
+  }
+
+  return response.json();
+};
+
+const fetchForecastData = async (
+  city: string | { lat: number; lon: number },
+  apiKey: string
+): Promise<ForecastData> => {
+  const url =
+    typeof city === "string"
+      ? `${BASE_URL}/forecast?q=${city}&appid=${apiKey}&units=metric`
+      : `${BASE_URL}/forecast?lat=${city.lat}&lon=${city.lon}&appid=${apiKey}&units=metric`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Forecast API Error:", errorText);
+    throw new Error(`Failed to fetch forecast data: ${errorText}`);
+  }
+
+  return response.json();
+};
+
+const WeatherWidget: React.FC<WidgetProps> = ({
+  city: initialCity,
+  apiKey,
+}) => {
+  console.log("Widget Props:", { initialCity, apiKey });
+
   const [unit, setUnit] = useState<TemperatureUnit>("celsius");
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-
-  const fetchWeatherData = async () => {
-    try {
-      setLoading(true);
-      const weatherResponse = await fetch(
-        `${BASE_URL}/weather?q=${city}&appid=${apiKey}&units=metric`
-      );
-      //   const forecastResponse = await fetch(
-      //     `${BASE_URL}/forecast/weather?q=${city}&appid=${apiKey}&units=metric`
-      //   );
-
-      if (!weatherResponse.ok) {
-        throw new Error("Failed to fetch weather data");
-      }
-
-      const weatherData = await weatherResponse.json();
-      // const forecastData = await forecastResponse.json();
-
-      setCurrentWeather(weatherData);
-      // setForecast(forecastData.list);
-      setError(null);
-    } catch (err) {
-      setError(
-        "Error fetching weather data. Please check your API key and city name."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [location, setLocation] = useState<
+    string | { lat: number; lon: number }
+  >(initialCity);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
 
   useEffect(() => {
-    fetchWeatherData();
-  }, [city, apiKey]);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+          });
+          setIsLoadingLocation(false);
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          setLocation(initialCity);
+          setIsLoadingLocation(false);
+        }
+      );
+    } else {
+      setLocation(initialCity);
+      setIsLoadingLocation(false);
+    }
+  }, [initialCity]);
+
+  const {
+    data: currentWeather,
+    isLoading: isLoadingWeather,
+    isError: isErrorWeather,
+    error: weatherError,
+  } = useQuery({
+    queryKey: ["weather", location],
+    queryFn: () => fetchWeatherData(location, apiKey),
+    enabled: !isLoadingLocation,
+  });
+
+  const {
+    data: forecast,
+    isLoading: isLoadingForecast,
+    isError: isErrorForecast,
+  } = useQuery({
+    queryKey: ["forecast", location],
+    queryFn: () => fetchForecastData(location, apiKey),
+    enabled: !isLoadingLocation,
+  });
 
   const convertTemp = (temp: number): number => {
     if (unit === "fahrenheit") {
@@ -66,96 +140,204 @@ const WeatherWidget: React.FC<WidgetProps> = ({ city, apiKey }) => {
     return `${Math.round(converted)}°${unit === "celsius" ? "C" : "F"}`;
   };
 
-  if (loading) {
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const day = date.toLocaleDateString("en-US", { weekday: "long" });
+    const numeric = date.toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "numeric",
+    });
+    return { day, numeric };
+  };
+
+  // Group forecast by day and get the middle reading of each day
+  const getDailyForecasts = () => {
+    if (!forecast) return [];
+
+    const dailyReadings: { [key: string]: any[] } = {};
+
+    forecast.list.forEach((reading) => {
+      const date = reading.dt_txt.split(" ")[0];
+      if (!dailyReadings[date]) {
+        dailyReadings[date] = [];
+      }
+      dailyReadings[date].push(reading);
+    });
+
+    return Object.values(dailyReadings)
+      .map((readings) => readings[Math.floor(readings.length / 2)])
+      .slice(0, 7); // Get only 7 days
+  };
+
+  const handlePrevious = () => {
+    setCurrentIndex((prev) =>
+      prev > 0 ? prev - 1 : dailyForecasts.length - 1
+    );
+  };
+
+  const handleNext = () => {
+    setCurrentIndex((prev) =>
+      prev < dailyForecasts.length - 1 ? prev + 1 : 0
+    );
+  };
+
+  const getVisibleDays = () => {
+    if (!dailyForecasts.length) return [];
+
+    const lastIndex = dailyForecasts.length - 1;
+    const prev = currentIndex === 0 ? lastIndex : currentIndex - 1;
+    const next = currentIndex === lastIndex ? 0 : currentIndex + 1;
+
+    return [
+      { day: dailyForecasts[prev], position: "previous" },
+      { day: dailyForecasts[currentIndex], position: "current" },
+      { day: dailyForecasts[next], position: "next" },
+    ];
+  };
+
+  if (isLoadingLocation || isLoadingWeather || isLoadingForecast) {
     return (
       <Theme>
-        <div className="weather-widget loading">
-          <UpdateIcon className="spin" />
-          Loading weather data...
-        </div>
+        <Container className="weather-widget">
+          <Flex align="center" justify="center" style={{ minHeight: "400px" }}>
+            <Text size="5">Loading weather data...</Text>
+          </Flex>
+        </Container>
       </Theme>
     );
   }
 
-  if (error) {
+  if (isErrorWeather || isErrorForecast) {
     return (
       <Theme>
-        <div className="weather-widget error">{error}</div>
+        <Container className="weather-widget error">
+          <Text color="red">
+            {weatherError instanceof Error
+              ? weatherError.message
+              : "Error fetching weather data. Please check your API key and city name."}
+          </Text>
+        </Container>
       </Theme>
     );
   }
+
+  const dailyForecasts = getDailyForecasts();
 
   return (
-    <Theme>
-      <div className="weather-widget">
-        <div className="widget-header">
-          <h2>{city}</h2>
-          <button
+    <Theme appearance="light" accentColor="blue" radius="large" scaling="95%">
+      <Container className="weather-widget">
+        <Flex justify="between" align="center" className="widget-header">
+          <Heading size="8" weight="bold" className="city-title" mb="0">
+            {currentWeather?.name || initialCity}
+          </Heading>
+          <Button
             onClick={() =>
               setUnit(unit === "celsius" ? "fahrenheit" : "celsius")
             }
-            className="unit-toggle"
+            size="3"
+            variant="solid"
           >
+            <SunIcon width="16" height="16" />
             Switch to {unit === "celsius" ? "°F" : "°C"}
-          </button>
-        </div>
+          </Button>
+        </Flex>
 
-        {currentWeather && (
-          <div className="current-weather">
-            <div className="temp-display">
-              <img
-                src={`http://openweathermap.org/img/w/${currentWeather.weather[0].icon}.png`}
-                alt={currentWeather.weather[0].description}
-              />
-              <span className="temperature">
-                {formatTemp(currentWeather.main.temp)}
-              </span>
-            </div>
-            <div className="weather-details">
-              <p>Feels like: {formatTemp(currentWeather.main.feels_like)}</p>
-              <p>Humidity: {currentWeather.main.humidity}%</p>
-              <p>Wind: {Math.round(currentWeather.wind.speed)} m/s</p>
-            </div>
-          </div>
-        )}
-
-        {/* <div className="forecast">
-          {forecast.map((day, index) => (
-            <div
-              key={day.dt}
-              className={`forecast-day ${
-                selectedDay === index ? "selected" : ""
-              }`}
-              onClick={() =>
-                setSelectedDay(selectedDay === index ? null : index)
-              }
+        <Box className="carousel-container">
+          <Flex align="center" gap="4" className="carousel-content">
+            <Button
+              variant="ghost"
+              onClick={handlePrevious}
+              className="carousel-button"
             >
-              <div className="day-name">
-                {new Date(day.dt * 1000).toLocaleDateString("en-US", {
-                  weekday: "short",
-                })}
-              </div>
-              <img
-                src={`http://openweathermap.org/img/w/${day.weather[0].icon}.png`}
-                alt={day.weather[0].description}
-              />
-              <div className="day-temp">
-                <span className="max">{formatTemp(day.temp.max)}</span>
-                <span className="min">{formatTemp(day.temp.min)}</span>
-              </div>
-              {selectedDay === index && (
-                <div className="day-details">
-                  <p>{day.weather[0].description}</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div> */}
+              <ChevronLeftIcon width="24" height="24" />
+            </Button>
 
-        <button onClick={fetchWeatherData} className="refresh-button">
-          <UpdateIcon /> Refresh
-        </button>
-      </div>
+            <Flex className="cards-container">
+              <AnimatePresence mode="wait">
+                {getVisibleDays().map(({ day, position }) => (
+                  <motion.div
+                    key={day.dt}
+                    className={`card-wrapper ${position}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: position === "current" ? 1 : 0.7 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <Card className="forecast-card">
+                      <Box className="day-date">
+                        <Text size="6" weight="bold">
+                          {formatDate(day.dt_txt).day}
+                        </Text>
+                        <Text className="date-numeric">
+                          {formatDate(day.dt_txt).numeric}
+                        </Text>
+                      </Box>
+                      <Flex
+                        direction="column"
+                        align="center"
+                        justify="center"
+                        gap="4"
+                        className="temp-display"
+                      >
+                        <img
+                          src={`http://openweathermap.org/img/w/${day.weather[0].icon}.png`}
+                          alt={day.weather[0].description}
+                          className="weather-icon"
+                        />
+                        <motion.div
+                          key={`${day.dt}-${unit}`}
+                          initial={{ opacity: 0, y: -20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.4, ease: "easeOut" }}
+                        >
+                          <Text size="8" weight="bold" className="temperature">
+                            {formatTemp(day.main.temp)}
+                          </Text>
+                        </motion.div>
+                      </Flex>
+                      <Text
+                        size="4"
+                        color="gray"
+                        className="weather-description"
+                      >
+                        {day.weather[0].description}
+                      </Text>
+                      <Box className="weather-details">
+                        <Flex align="center" justify="center" gap="3" mb="3">
+                          <WiHumidity
+                            size={24}
+                            className="weather-icon-small"
+                          />
+                          <Text as="p" size="4">
+                            {day.main.humidity}%
+                          </Text>
+                        </Flex>
+                        <Flex align="center" justify="center" gap="3">
+                          <WiStrongWind
+                            size={24}
+                            className="weather-icon-small"
+                          />
+                          <Text as="p" size="4">
+                            {Math.round(day.wind.speed)} m/s
+                          </Text>
+                        </Flex>
+                      </Box>
+                    </Card>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </Flex>
+
+            <Button
+              variant="ghost"
+              onClick={handleNext}
+              className="carousel-button"
+            >
+              <ChevronRightIcon width="24" height="24" />
+            </Button>
+          </Flex>
+        </Box>
+      </Container>
     </Theme>
   );
 };

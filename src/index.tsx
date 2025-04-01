@@ -1,45 +1,49 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import WeatherWidget from "./WeatherWidget";
-import { WidgetConfig } from "./types";
 
-declare global {
-  interface Window {
-    WIDGET_CONFIG?: WidgetConfig;
-  }
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // Data is considered fresh for 5 minutes
+      gcTime: 30 * 60 * 1000, // Cache is kept for 30 minutes
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+const apiKey = process.env.WEATHER_API_KEY;
+if (!apiKey) {
+  throw new Error(
+    "Weather API key is not configured. Please check your .env file."
+  );
 }
 
-let root: ReturnType<typeof createRoot> | null = null;
-
-const init = (config: WidgetConfig) => {
-  const container = document.getElementById("widget-container");
-  if (!container) {
-    console.error("Widget container not found");
-    return;
-  }
-
-  // In development, use the environment variable if no API key is provided
-  const apiKey = config.apiKey || process.env.WEATHER_API_KEY;
-
-  if (!apiKey) {
-    console.error("No API key provided");
-    return;
-  }
-
-  // If we already have a root, just update it
-  if (root) {
-    root.render(<WeatherWidget city={config.city} apiKey={apiKey} />);
-    return;
-  }
-
-  // Otherwise create a new root
-  root = createRoot(container);
-  root.render(<WeatherWidget city={config.city} apiKey={apiKey} />);
+// For development, you can replace these with your own values
+const defaultConfig = {
+  city: "London",
+  apiKey, // Use the API key directly
 };
 
-// Initialize in development mode
-if (process.env.NODE_ENV === "development" && window.WIDGET_CONFIG) {
-  init(window.WIDGET_CONFIG);
+// Debug: Check configuration
+console.log("Config:", {
+  city: defaultConfig.city,
+  apiKeyLength: defaultConfig.apiKey?.length,
+  apiKeyStart: defaultConfig.apiKey?.substring(0, 4),
+});
+
+const container = document.getElementById("root");
+if (!container) {
+  throw new Error("Root element not found");
 }
 
-export { init };
+const root = createRoot(container);
+root.render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <WeatherWidget city={defaultConfig.city} apiKey={defaultConfig.apiKey} />
+    </QueryClientProvider>
+  </React.StrictMode>
+);
