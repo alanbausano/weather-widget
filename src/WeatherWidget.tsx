@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import "@radix-ui/themes/styles.css";
 import {
   Theme,
@@ -12,193 +12,42 @@ import {
 } from "@radix-ui/themes";
 import {
   SunIcon,
+  MoonIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "@radix-ui/react-icons";
 import { WiHumidity, WiStrongWind } from "react-icons/wi";
-import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  WeatherData,
-  ForecastData,
-  WidgetProps,
-  TemperatureUnit,
-} from "./types";
+import { WidgetProps } from "./types";
+import { useWeatherData } from "./hooks/useWeatherData";
+import { useWeatherCarousel } from "./hooks/useWeatherCarousel";
+import { useTheme } from "./hooks/useTheme";
+import { formatDate } from "./utils/dateUtils";
 import "./WeatherWidget.css";
-
-const BASE_URL = "https://api.openweathermap.org/data/2.5";
-
-const fetchWeatherData = async (
-  city: string | { lat: number; lon: number },
-  apiKey: string
-): Promise<WeatherData> => {
-  console.log("Using API key:", apiKey);
-
-  const url =
-    typeof city === "string"
-      ? `${BASE_URL}/weather?q=${city}&appid=${apiKey}&units=metric`
-      : `${BASE_URL}/weather?lat=${city.lat}&lon=${city.lon}&appid=${apiKey}&units=metric`;
-
-  console.log("Fetching weather from:", url);
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Weather API Error:", errorText);
-    throw new Error(`Failed to fetch weather data: ${errorText}`);
-  }
-
-  return response.json();
-};
-
-const fetchForecastData = async (
-  city: string | { lat: number; lon: number },
-  apiKey: string
-): Promise<ForecastData> => {
-  const url =
-    typeof city === "string"
-      ? `${BASE_URL}/forecast?q=${city}&appid=${apiKey}&units=metric`
-      : `${BASE_URL}/forecast?lat=${city.lat}&lon=${city.lon}&appid=${apiKey}&units=metric`;
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Forecast API Error:", errorText);
-    throw new Error(`Failed to fetch forecast data: ${errorText}`);
-  }
-
-  return response.json();
-};
 
 const WeatherWidget: React.FC<WidgetProps> = ({
   city: initialCity,
   apiKey,
 }) => {
-  console.log("Widget Props:", { initialCity, apiKey });
-
-  const [unit, setUnit] = useState<TemperatureUnit>("celsius");
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [location, setLocation] = useState<
-    string | { lat: number; lon: number }
-  >(initialCity);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude,
-          });
-          setIsLoadingLocation(false);
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-          setLocation(initialCity);
-          setIsLoadingLocation(false);
-        }
-      );
-    } else {
-      setLocation(initialCity);
-      setIsLoadingLocation(false);
-    }
-  }, [initialCity]);
-
   const {
-    data: currentWeather,
-    isLoading: isLoadingWeather,
-    isError: isErrorWeather,
+    currentWeather,
+    forecast,
+    isLoading,
+    isError,
     error: weatherError,
-  } = useQuery({
-    queryKey: ["weather", location],
-    queryFn: () => fetchWeatherData(location, apiKey),
-    enabled: !isLoadingLocation,
-  });
+    unit,
+    setUnit,
+    formatTemp,
+  } = useWeatherData(initialCity, apiKey);
 
-  const {
-    data: forecast,
-    isLoading: isLoadingForecast,
-    isError: isErrorForecast,
-  } = useQuery({
-    queryKey: ["forecast", location],
-    queryFn: () => fetchForecastData(location, apiKey),
-    enabled: !isLoadingLocation,
-  });
+  const { theme, toggleTheme } = useTheme();
+  const { handlePrevious, handleNext, getVisibleDays } =
+    useWeatherCarousel(forecast);
 
-  const convertTemp = (temp: number): number => {
-    if (unit === "fahrenheit") {
-      return (temp * 9) / 5 + 32;
-    }
-    return temp;
-  };
-
-  const formatTemp = (temp: number): string => {
-    const converted = convertTemp(temp);
-    return `${Math.round(converted)}°${unit === "celsius" ? "C" : "F"}`;
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const day = date.toLocaleDateString("en-US", { weekday: "long" });
-    const numeric = date.toLocaleDateString("en-US", {
-      day: "numeric",
-      month: "numeric",
-    });
-    return { day, numeric };
-  };
-
-  // Group forecast by day and get the middle reading of each day
-  const getDailyForecasts = () => {
-    if (!forecast) return [];
-
-    const dailyReadings: { [key: string]: any[] } = {};
-
-    forecast.list.forEach((reading) => {
-      const date = reading.dt_txt.split(" ")[0];
-      if (!dailyReadings[date]) {
-        dailyReadings[date] = [];
-      }
-      dailyReadings[date].push(reading);
-    });
-
-    return Object.values(dailyReadings)
-      .map((readings) => readings[Math.floor(readings.length / 2)])
-      .slice(0, 7); // Get only 7 days
-  };
-
-  const handlePrevious = () => {
-    setCurrentIndex((prev) =>
-      prev > 0 ? prev - 1 : dailyForecasts.length - 1
-    );
-  };
-
-  const handleNext = () => {
-    setCurrentIndex((prev) =>
-      prev < dailyForecasts.length - 1 ? prev + 1 : 0
-    );
-  };
-
-  const getVisibleDays = () => {
-    if (!dailyForecasts.length) return [];
-
-    const lastIndex = dailyForecasts.length - 1;
-    const prev = currentIndex === 0 ? lastIndex : currentIndex - 1;
-    const next = currentIndex === lastIndex ? 0 : currentIndex + 1;
-
-    return [
-      { day: dailyForecasts[prev], position: "previous" },
-      { day: dailyForecasts[currentIndex], position: "current" },
-      { day: dailyForecasts[next], position: "next" },
-    ];
-  };
-
-  if (isLoadingLocation || isLoadingWeather || isLoadingForecast) {
+  if (isLoading) {
     return (
-      <Theme>
-        <Container className="weather-widget">
+      <Theme appearance={theme}>
+        <Container className="weather-widget" data-theme={theme}>
           <Flex align="center" justify="center" style={{ minHeight: "400px" }}>
             <Text size="5">Loading weather data...</Text>
           </Flex>
@@ -207,10 +56,10 @@ const WeatherWidget: React.FC<WidgetProps> = ({
     );
   }
 
-  if (isErrorWeather || isErrorForecast) {
+  if (isError) {
     return (
-      <Theme>
-        <Container className="weather-widget error">
+      <Theme appearance={theme}>
+        <Container className="weather-widget error" data-theme={theme}>
           <Text color="red">
             {weatherError instanceof Error
               ? weatherError.message
@@ -221,25 +70,31 @@ const WeatherWidget: React.FC<WidgetProps> = ({
     );
   }
 
-  const dailyForecasts = getDailyForecasts();
-
   return (
-    <Theme appearance="light" accentColor="blue" radius="large" scaling="95%">
-      <Container className="weather-widget">
+    <Theme appearance={theme} accentColor="blue" radius="large" scaling="95%">
+      <Container className="weather-widget" data-theme={theme}>
         <Flex justify="between" align="center" className="widget-header">
           <Heading size="8" weight="bold" className="city-title" mb="0">
             {currentWeather?.name || initialCity}
           </Heading>
-          <Button
-            onClick={() =>
-              setUnit(unit === "celsius" ? "fahrenheit" : "celsius")
-            }
-            size="3"
-            variant="solid"
-          >
-            <SunIcon width="16" height="16" />
-            Switch to {unit === "celsius" ? "°F" : "°C"}
-          </Button>
+          <Flex gap="3">
+            <Button onClick={toggleTheme} size="3" variant="soft">
+              {theme === "light" ? (
+                <MoonIcon width="16" height="16" />
+              ) : (
+                <SunIcon width="16" height="16" />
+              )}
+            </Button>
+            <Button
+              onClick={() =>
+                setUnit(unit === "celsius" ? "fahrenheit" : "celsius")
+              }
+              size="3"
+              variant="solid"
+            >
+              Switch to {unit === "celsius" ? "°F" : "°C"}
+            </Button>
+          </Flex>
         </Flex>
 
         <Box className="carousel-container">
