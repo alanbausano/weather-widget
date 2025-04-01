@@ -226,6 +226,17 @@
   color: #666 !important;
 }
 
+/* Loading Spinner Styles */
+.weather-widget[data-theme="dark"] div[style*="border"] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  border-top-color: var(--accent-9) !important;
+}
+
+.weather-widget[data-theme="light"] div[style*="border"] {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  border-top-color: var(--accent-9) !important;
+}
+
 @media (max-width: 768px) {
   .weather-widget {
     margin: 10px;

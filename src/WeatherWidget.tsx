@@ -23,6 +23,7 @@ import { useWeatherData } from "./hooks/useWeatherData";
 import { useWeatherCarousel } from "./hooks/useWeatherCarousel";
 import { useTheme } from "./hooks/useTheme";
 import { formatDate } from "./utils/dateUtils";
+import LoadingSpinner from "./components/LoadingSpinner";
 import "./WeatherWidget.css";
 
 const WeatherWidget: React.FC<WidgetProps> = ({
@@ -49,7 +50,7 @@ const WeatherWidget: React.FC<WidgetProps> = ({
       <Theme appearance={theme}>
         <Container className="weather-widget" data-theme={theme}>
           <Flex align="center" justify="center" style={{ minHeight: "400px" }}>
-            <Text size="5">Loading weather data...</Text>
+            <LoadingSpinner />
           </Flex>
         </Container>
       </Theme>

@@ -5,11 +5,16 @@ A customizable weather widget that can be embedded in any website. The widget sh
 ## Features
 
 - Current weather conditions including temperature, humidity, and wind speed
-- 7-day weather forecast
-- Toggle between Celsius and Fahrenheit
-- Interactive forecast days with detailed information
+- 7-day weather forecast with interactive carousel navigation
+- Automatic geolocation support with fallback to specified city
+- Toggle between light and dark themes
+- Toggle between Celsius and Fahrenheit units
+- Interactive forecast cards with detailed weather information
 - Responsive design that works on all screen sizes
 - Built with React and Radix UI
+- Data caching and automatic updates (5-minute stale time)
+- Error handling and loading states
+- Customizable through simple configuration
 
 ## Installation
 
@@ -35,7 +40,7 @@ A customizable weather widget that can be embedded in any website. The widget sh
 
     if (window.Widget) {
       Widget.init({
-        city: "your-city-name", // e.g., 'London', 'San Francisco', 'Buenos Aires'
+        city: "your-city-name", // Optional if geolocation is available
         apiKey: "your-openweather-api-key", // Your OpenWeather API key
       });
     } else {
@@ -44,6 +49,40 @@ A customizable weather widget that can be embedded in any website. The widget sh
   });
 </script>
 ```
+
+## Configuration Options
+
+The widget accepts the following configuration options:
+
+- `city` (optional): Default city name. If not provided and geolocation is available, the widget will use the user's current location
+- `apiKey` (required): Your OpenWeather API key
+
+## Features in Detail
+
+### Theme Support
+
+The widget automatically adapts to light and dark themes, with a built-in theme toggle button. The theme preference is preserved across sessions.
+
+### Temperature Units
+
+Users can switch between Celsius and Fahrenheit units at any time using the unit toggle button.
+
+### Weather Information
+
+Each forecast card displays:
+
+- Day and date
+- Weather icon
+- Temperature
+- Weather description
+- Humidity percentage
+- Wind speed (in m/s)
+
+### Interactive Carousel
+
+- Navigate through the 7-day forecast using previous/next buttons
+- Smooth animations when transitioning between days
+- Responsive design that adapts to different screen sizes
 
 ## Development
 
@@ -73,7 +112,3 @@ When using this widget in production:
 - Never expose your API key in client-side code
 - Consider implementing a backend proxy to make API calls
 - Or use environment-specific API keys (development vs production)
-
-## License
-
-ISC
