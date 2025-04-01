@@ -7,8 +7,11 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "weather-widget.js",
-    library: "Widget",
-    libraryTarget: "umd",
+    library: {
+      name: "Widget",
+      type: "umd",
+      export: "Widget",
+    },
     globalObject: "this",
   },
   module: {
@@ -29,10 +32,10 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
-      template: "./public/index.html",
+      template: "./public/demo.html",
+      filename: "index.html",
     }),
     new Dotenv({
-      path: "./.env",
       systemvars: true,
       safe: false,
     }),
@@ -42,5 +45,7 @@ module.exports = {
       directory: path.join(__dirname, "public"),
     },
     port: 3002,
+    hot: true,
+    open: true,
   },
 };

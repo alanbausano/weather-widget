@@ -14,36 +14,46 @@ const queryClient = new QueryClient({
   },
 });
 
-const apiKey = process.env.WEATHER_API_KEY;
-if (!apiKey) {
-  throw new Error(
-    "Weather API key is not configured. Please check your .env file."
-  );
+interface WidgetConfig {
+  city: string;
+  apiKey: string;
 }
 
-// For development, you can replace these with your own values
-const defaultConfig = {
-  city: "London",
-  apiKey, // Use the API key directly
-};
+class WidgetInitializer {
+  private root: any = null;
 
-// Debug: Check configuration
-console.log("Config:", {
-  city: defaultConfig.city,
-  apiKeyLength: defaultConfig.apiKey?.length,
-  apiKeyStart: defaultConfig.apiKey?.substring(0, 4),
-});
+  init(config: WidgetConfig) {
+    const container = document.getElementById("widget-container");
+    if (!container) {
+      throw new Error(
+        'Widget container not found. Please ensure a div with id "widget-container" exists.'
+      );
+    }
 
-const container = document.getElementById("root");
-if (!container) {
-  throw new Error("Root element not found");
+    // Clean up any existing instance
+    if (this.root) {
+      this.root.unmount();
+    }
+
+    this.root = createRoot(container);
+    this.root.render(
+      <React.StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <WeatherWidget city={config.city} apiKey={config.apiKey} />
+        </QueryClientProvider>
+      </React.StrictMode>
+    );
+  }
 }
 
-const root = createRoot(container);
-root.render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <WeatherWidget city={defaultConfig.city} apiKey={defaultConfig.apiKey} />
-    </QueryClientProvider>
-  </React.StrictMode>
-);
+// Export the Widget object to the window
+const Widget = new WidgetInitializer();
+export { Widget };
+
+// Make Widget available globally
+declare global {
+  interface Window {
+    Widget: typeof Widget;
+  }
+}
+window.Widget = Widget;

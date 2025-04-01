@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather Widget Demo</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The widget will be inserted here -->
+    <div id="widget-container"></div>
+
+    <!-- Load the widget script -->
+    <script src="/weather-widget.js"></script>
+    <script>
+      window.addEventListener("load", function () {
+        if (window.Widget) {
+          Widget.init({
+            city: "London",
+            apiKey: "a8a068a4a6e8fba359710ca234756c68", // Replace with your API key
+          });
+        } else {
+          console.error("Weather Widget not loaded");
+        }
+      });
+    </script>
+  </body>
+</html>
